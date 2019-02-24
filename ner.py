@@ -224,6 +224,7 @@ def main():
               cache_dir=cache_dir,
               num_labels = num_labels)
     model.to(device)
+    model = torch.nn.DataParallel(model,device_ids=[0,1,2])
 
     param_optimizer = list(model.named_parameters())
     no_decay = ['bias', 'LayerNorm.bias', 'LayerNorm.weight']
@@ -263,6 +264,7 @@ def main():
             batch = tuple(t.to(device) for t in batch)
             input_ids, input_mask, segment_ids, label_ids = batch
             loss = model(input_ids, segment_ids, input_mask, label_ids)
+            loss = loss.mean()
             if gradient_accumulation_steps > 1:
                 loss = loss / args.gradient_accumulation_steps
             loss.backward()
