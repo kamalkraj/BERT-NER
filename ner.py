@@ -322,8 +322,8 @@ def main():
                     if j == 0:
                         continue
                     if m:
-                        temp_1.append(label_map[label_ids[i][j]])
-                        temp_2.append(label_map[logits[i][j]])
+                        temp_1.append(label_map.get(label_ids[i][j],'O'))
+                        temp_2.append(label_map.get(logits[i][j],'O'))
                     else:
                         temp_1.pop()
                         temp_2.pop()
