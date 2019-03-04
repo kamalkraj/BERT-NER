@@ -228,7 +228,7 @@ def main():
               cache_dir=cache_dir,
               num_labels = num_labels)
     model.to(device)
-    # model = torch.nn.DataParallel(model,device_ids=[0,1,2])
+    model = torch.nn.DataParallel(model,device_ids=[0,1,2])
 
     param_optimizer = list(model.named_parameters())
     no_decay = ['bias', 'LayerNorm.bias', 'LayerNorm.weight']
@@ -263,24 +263,24 @@ def main():
     model.train()
     for _ in trange(int(num_train_epochs), desc="Epoch"):
         model.train()
-        # tr_loss = 0
-        # nb_tr_examples, nb_tr_steps = 0, 0
-        # for step, batch in enumerate(tqdm(train_dataloader, desc="Iteration")):
-        #     batch = tuple(t.to(device) for t in batch)
-        #     input_ids, input_mask, segment_ids, label_ids = batch
-        #     loss = model(input_ids, segment_ids, input_mask, label_ids)
-        #     loss = loss.mean()
-        #     if gradient_accumulation_steps > 1:
-        #         loss = loss / args.gradient_accumulation_steps
-        #     loss.backward()
+        tr_loss = 0
+        nb_tr_examples, nb_tr_steps = 0, 0
+        for step, batch in enumerate(tqdm(train_dataloader, desc="Iteration")):
+            batch = tuple(t.to(device) for t in batch)
+            input_ids, input_mask, segment_ids, label_ids = batch
+            loss = model(input_ids, segment_ids, input_mask, label_ids)
+            loss = loss.mean()
+            if gradient_accumulation_steps > 1:
+                loss = loss / args.gradient_accumulation_steps
+            loss.backward()
 
-        #     tr_loss += loss.item()
-        #     nb_tr_examples += input_ids.size(0)
-        #     nb_tr_steps += 1
-        #     if (step + 1) % gradient_accumulation_steps == 0:
-        #         optimizer.step()
-        #         optimizer.zero_grad()
-        #         global_step += 1
+            tr_loss += loss.item()
+            nb_tr_examples += input_ids.size(0)
+            nb_tr_steps += 1
+            if (step + 1) % gradient_accumulation_steps == 0:
+                optimizer.step()
+                optimizer.zero_grad()
+                global_step += 1
         # print(tr_loss)
         
         eval_examples = processor.get_dev_examples(data_dir)
