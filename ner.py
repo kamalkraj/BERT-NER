@@ -90,10 +90,10 @@ class NerProcessor(DataProcessor):
     def get_dev_examples(self, data_dir):
         """See base class."""
         return self._create_examples(
-            self._read_tsv(os.path.join(data_dir, "valid.txt")), "dev")
+            self._read_tsv(os.path.join(data_dir, "test.txt")), "dev")
     
     def get_labels(self):
-        return ["<PAD>", "O", "B-MISC", "I-MISC",  "B-PER", "I-PER", "B-ORG", "I-ORG", "B-LOC", "I-LOC"]
+        return ["O", "B-MISC", "I-MISC",  "B-PER", "I-PER", "B-ORG", "I-ORG", "B-LOC", "I-LOC"]
 
     def _create_examples(self,lines,set_type):
         examples = []
@@ -322,8 +322,8 @@ def main():
                     if j == 0:
                         continue
                     if m:
-                        temp_1.append(label_map.get(label_ids[i][j],'O'))
-                        temp_2.append(label_map.get(logits[i][j],'O'))
+                        temp_1.append(label_map[label_ids[i][j]])
+                        temp_2.append(label_map[logits[i][j]])
                     else:
                         temp_1.pop()
                         temp_2.pop()
