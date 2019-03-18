@@ -5,6 +5,7 @@ import csv
 import logging
 import os
 import random
+import json
 import sys
 
 import numpy as np
@@ -458,7 +459,9 @@ def main():
         output_config_file = os.path.join(args.output_dir, CONFIG_NAME)
         with open(output_config_file, 'w') as f:
             f.write(model_to_save.config.to_json_string())
-
+        label_map = {i : label for i, label in enumerate(label_list,1)}    
+        model_config = {"bert_model":args.bert_model,"do_lower":args.do_lower_case,"max_seq_length":args.max_seq_length,"num_labels":len(label_list)+1,"label_map":label_map}
+        json.dump(model_config,open(os.path.join(args.output_dir,"model_config.json"),"w"))
         # Load a trained model and config that you have fine-tuned
     else:
         output_config_file = os.path.join(args.output_dir, CONFIG_NAME)
