@@ -25,6 +25,37 @@ Use google BERT to do CoNLL-2003 NER !
 avg / total     0.9690    0.9734    0.9711      1351
 ```
 
+# Inference
+
+```python
+from bert import Ner
+
+model = Ner("out/")
+
+output = model.predict("Steve went to Paris")
+
+print(output)
+# {
+#     "Steve": {
+#         "tag": "B-PER",
+#         "confidence": 0.999879002571106
+#     },
+#     "went": {
+#         "tag": "O",
+#         "confidence": 0.9968552589416504
+#     },
+#     "to": {
+#         "tag": "O",
+#         "confidence": 0.9996656179428101
+#     },
+#     "Paris": {
+#         "tag": "B-LOC",
+#         "confidence": 0.999504804611206
+#     }
+# }
+
+```
+
 
 ### Tensorflow version
 
