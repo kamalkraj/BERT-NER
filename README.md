@@ -24,3 +24,8 @@ Use google BERT to do CoNLL-2003 NER !
 
 avg / total     0.9690    0.9734    0.9711      1351
 ```
+
+
+### Tensorflow version
+
+- https://github.com/kyzhouhzau/BERT-NER
