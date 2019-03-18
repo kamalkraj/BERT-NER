@@ -90,10 +90,15 @@ class NerProcessor(DataProcessor):
     def get_dev_examples(self, data_dir):
         """See base class."""
         return self._create_examples(
-            self._read_tsv(os.path.join(data_dir, "test.txt")), "dev")
+            self._read_tsv(os.path.join(data_dir, "valid.txt")), "dev")
+    
+    def get_test_examples(self, data_dir):
+        """See base class."""
+        return self._create_examples(
+            self._read_tsv(os.path.join(data_dir, "test.txt")), "test")
     
     def get_labels(self):
-        return ["O", "B-MISC", "I-MISC",  "B-PER", "I-PER", "B-ORG", "I-ORG", "B-LOC", "I-LOC"]
+        return ["O", "B-MISC", "I-MISC",  "B-PER", "I-PER", "B-ORG", "I-ORG", "B-LOC", "I-LOC", "X", "[CLS]", "[SEP]"]
 
     def _create_examples(self,lines,set_type):
         examples = []
@@ -108,7 +113,7 @@ class NerProcessor(DataProcessor):
 def convert_examples_to_features(examples, label_list, max_seq_length, tokenizer):
     """Loads a data file into a list of `InputBatch`s."""
 
-    label_map = {label : i for i, label in enumerate(label_list)}
+    label_map = {label : i for i, label in enumerate(label_list,1)}
     
     features = []
     for (ex_index,example) in enumerate(examples):
@@ -118,13 +123,13 @@ def convert_examples_to_features(examples, label_list, max_seq_length, tokenizer
         labels = []
         for i, word in enumerate(textlist):
             token = tokenizer.tokenize(word)
-            tokens.append(token[0])
+            tokens.extend(token)
             label_1 = labellist[i]
             for m in range(len(token)):
                 if m == 0:
                     labels.append(label_1)
-                # else:
-                #     labels.append("X")
+                else:
+                    labels.append("X")
         if len(tokens) >= max_seq_length - 1:
             tokens = tokens[0:(max_seq_length - 2)]
             labels = labels[0:(max_seq_length - 2)]
@@ -133,14 +138,14 @@ def convert_examples_to_features(examples, label_list, max_seq_length, tokenizer
         label_ids = []
         ntokens.append("[CLS]")
         segment_ids.append(0)
-        label_ids.append(0)
+        label_ids.append(label_map["[CLS]"])
         for i, token in enumerate(tokens):
             ntokens.append(token)
             segment_ids.append(0)
             label_ids.append(label_map[labels[i]])
         ntokens.append("[SEP]")
         segment_ids.append(0)
-        label_ids.append(0)
+        label_ids.append(label_map["[SEP]"])
         input_ids = tokenizer.convert_tokens_to_ids(ntokens)
         input_mask = [1] * len(input_ids)
         while len(input_ids) < max_seq_length:
@@ -173,7 +178,7 @@ def convert_examples_to_features(examples, label_list, max_seq_length, tokenizer
 
 def main():
 
-    bert_model = "bert-large-cased"
+    bert_model = "bert-base-cased"
 
     data_dir = "data"
 
@@ -187,9 +192,9 @@ def main():
 
     gradient_accumulation_steps = 1
 
-    num_train_epochs = 3
+    num_train_epochs = 10
     
-    train_batch_size = 16
+    train_batch_size = 32
 
     eval_batch_size = 32
 
@@ -211,7 +216,7 @@ def main():
 
     label_list = processor.get_labels()
 
-    num_labels = len(label_list)
+    num_labels = len(label_list) + 1
 
     tokenizer = BertTokenizer.from_pretrained(bert_model, do_lower_case=do_lower_case)
 
@@ -228,7 +233,7 @@ def main():
               cache_dir=cache_dir,
               num_labels = num_labels)
     model.to(device)
-    model = torch.nn.DataParallel(model,device_ids=[0,1,2])
+    # model = torch.nn.DataParallel(model,device_ids=[0,1,2])
 
     param_optimizer = list(model.named_parameters())
     no_decay = ['bias', 'LayerNorm.bias', 'LayerNorm.weight']
@@ -259,7 +264,7 @@ def main():
     train_sampler = RandomSampler(train_data)
 
     train_dataloader = DataLoader(train_data, sampler=train_sampler, batch_size=train_batch_size)
-    label_map = {i : label for i, label in enumerate(label_list)}
+    label_map = {i : label for i, label in enumerate(label_list,1)}
     model.train()
     for _ in trange(int(num_train_epochs), desc="Epoch"):
         model.train()
@@ -269,9 +274,9 @@ def main():
             batch = tuple(t.to(device) for t in batch)
             input_ids, input_mask, segment_ids, label_ids = batch
             loss = model(input_ids, segment_ids, input_mask, label_ids)
-            loss = loss.mean()
+            # loss = loss.mean()
             if gradient_accumulation_steps > 1:
-                loss = loss / args.gradient_accumulation_steps
+                loss = loss / gradient_accumulation_steps
             loss.backward()
 
             tr_loss += loss.item()
@@ -321,7 +326,7 @@ def main():
                 for j,m in enumerate(mask):
                     if j == 0:
                         continue
-                    if m:
+                    if m and label_map[label_ids[i][j]] != "X":
                         temp_1.append(label_map[label_ids[i][j]])
                         temp_2.append(label_map[logits[i][j]])
                     else:
@@ -330,7 +335,55 @@ def main():
                         y_true.append(temp_1)
                         y_pred.append(temp_2)
                         break
-        print(classification_report(y_true, y_pred))
+        print(classification_report(y_true, y_pred,digits=4))
+        eval_examples = processor.get_test_examples(data_dir)
+        eval_features = convert_examples_to_features(
+            eval_examples, label_list, max_seq_length, tokenizer)
+        # logger.info("***** Running evaluation *****")
+        # logger.info("  Num examples = %d", len(eval_examples))
+        # logger.info("  Batch size = %d", eval_batch_size)
+        all_input_ids = torch.tensor([f.input_ids for f in eval_features], dtype=torch.long)
+        all_input_mask = torch.tensor([f.input_mask for f in eval_features], dtype=torch.long)
+        all_segment_ids = torch.tensor([f.segment_ids for f in eval_features], dtype=torch.long)
+        all_label_ids = torch.tensor([f.label_id for f in eval_features], dtype=torch.long)
+        eval_data = TensorDataset(all_input_ids, all_input_mask, all_segment_ids, all_label_ids)
+        # Run prediction for full data
+        eval_sampler = SequentialSampler(eval_data)
+        eval_dataloader = DataLoader(eval_data, sampler=eval_sampler, batch_size=eval_batch_size)
+        model.eval()
+        eval_loss, eval_accuracy = 0, 0
+        nb_eval_steps, nb_eval_examples = 0, 0
+        y_true = []
+        y_pred = []
+        for input_ids, input_mask, segment_ids, label_ids in tqdm(eval_dataloader, desc="Evaluating"):
+            input_ids = input_ids.to(device)
+            input_mask = input_mask.to(device)
+            segment_ids = segment_ids.to(device)
+            label_ids = label_ids.to(device)
+
+            with torch.no_grad():
+                logits = model(input_ids, segment_ids, input_mask)
+            
+            logits = torch.argmax(F.log_softmax(logits,dim=2),dim=2)
+            logits = logits.detach().cpu().numpy()
+            label_ids = label_ids.to('cpu').numpy()
+            input_mask = input_mask.to('cpu').numpy()
+            for i,mask in enumerate(input_mask):
+                temp_1 =  []
+                temp_2 = []
+                for j,m in enumerate(mask):
+                    if j == 0:
+                        continue
+                    if m and label_map[label_ids[i][j]] != "X":
+                        temp_1.append(label_map[label_ids[i][j]])
+                        temp_2.append(label_map[logits[i][j]])
+                    else:
+                        temp_1.pop()
+                        temp_2.pop()
+                        y_true.append(temp_1)
+                        y_pred.append(temp_2)
+                        break
+        print(classification_report(y_true, y_pred,digits=4))
     
 
 if __name__ == "__main__":
