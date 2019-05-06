@@ -37,6 +37,7 @@ avg / total     0.9470    0.9532    0.9501      5942
 
 avg / total     0.9049    0.9189    0.9117      5648
 ```
+## Pretrained model download from [here](https://drive.google.com/file/d/1hmj1zC6xipR7KTT04bJpSUPNU1pRuI7h/view?usp=sharing)
 
 # Inference
 
