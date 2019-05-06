@@ -509,18 +509,19 @@ def main():
             for i,mask in enumerate(input_mask):
                 temp_1 =  []
                 temp_2 = []
-                for j,m in enumerate(mask):
+                for j, m in enumerate(mask):
                     if j == 0:
                         continue
-                    if m and label_map[label_ids[i][j]] != "X":
-                        temp_1.append(label_map[label_ids[i][j]])
-                        temp_2.append(label_map[logits[i][j]])
+                    if m:
+                        if label_map[label_ids[i][j]] != "X":
+                            temp_1.append(label_map[label_ids[i][j]])
+                            temp_2.append(label_map[logits[i][j]])
                     else:
                         temp_1.pop()
                         temp_2.pop()
-                        y_true.append(temp_1)
-                        y_pred.append(temp_2)
                         break
+                y_true.append(temp_1)
+                y_pred.append(temp_2)
         report = classification_report(y_true, y_pred,digits=4)
         output_eval_file = os.path.join(args.output_dir, "eval_results.txt")
         with open(output_eval_file, "w") as writer:
