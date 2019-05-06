@@ -13,6 +13,21 @@ from pytorch_pretrained_bert.modeling import (CONFIG_NAME, WEIGHTS_NAME,
                                               BertForTokenClassification)
 from pytorch_pretrained_bert.tokenization import BertTokenizer
 
+class BertNer(BertForTokenClassification):
+   
+    def forward(self, input_ids, token_type_ids=None, attention_mask=None, valid_ids=None):
+        sequence_output, _ = self.bert(input_ids, token_type_ids, attention_mask, output_all_encoded_layers=False)
+        batch_size,max_len,feat_dim = sequence_output.shape
+        valid_output = torch.zeros(batch_size,max_len,feat_dim,dtype=torch.float32)
+        for i in range(batch_size):
+            jj = -1
+            for j in range(max_len):
+                    if valid_ids[i][j].item() == 1:
+                        jj += 1
+                        valid_output[i][jj] = sequence_output[i][j]
+        sequence_output = self.dropout(valid_output)
+        logits = self.classifier(sequence_output)
+        return logits
 
 class Ner:
 
@@ -29,7 +44,7 @@ class Ner:
         output_config_file = os.path.join(model_dir, CONFIG_NAME)
         output_model_file = os.path.join(model_dir, WEIGHTS_NAME)
         config = BertConfig(output_config_file)
-        model = BertForTokenClassification(config, num_labels=model_config["num_labels"])
+        model = BertNer(config, num_labels=model_config["num_labels"])
         model.load_state_dict(torch.load(output_model_file))
         tokenizer = BertTokenizer.from_pretrained(model_config["bert_model"],do_lower_case=False)
         return model, tokenizer, model_config
@@ -54,8 +69,10 @@ class Ner:
         tokens, valid_positions = self.tokenize(text)
         ## insert "[CLS]"
         tokens.insert(0,"[CLS]")
+        valid_positions.insert(0,1)
         ## insert "[SEP]"
         tokens.append("[SEP]")
+        valid_positions.append(1)
         segment_ids = []
         for i in range(len(tokens)):
             segment_ids.append(0)
@@ -65,15 +82,17 @@ class Ner:
             input_ids.append(0)
             input_mask.append(0)
             segment_ids.append(0)
+            valid_positions.append(0)
         return input_ids,input_mask,segment_ids,valid_positions
 
     def predict(self, text: str):
-        input_ids,input_mask,segment_ids,valid_positions = self.preprocess(text)
+        input_ids,input_mask,segment_ids,valid_ids = self.preprocess(text)
         input_ids = torch.tensor([input_ids],dtype=torch.long)
         input_mask = torch.tensor([input_mask],dtype=torch.long)
         segment_ids = torch.tensor([segment_ids],dtype=torch.long)
+        valid_ids = torch.tensor([valid_ids],dtype=torch.long)
         with torch.no_grad():
-            logits = self.model(input_ids, segment_ids, input_mask)
+            logits = self.model(input_ids, segment_ids, input_mask,valid_ids)
         logits = F.softmax(logits,dim=2)
         logits_label = torch.argmax(logits,dim=2)
         logits_label = logits_label.detach().cpu().numpy()
@@ -84,11 +103,7 @@ class Ner:
         logits_label.pop(0)
         logits_label.pop()
 
-        assert len(logits_label) == len(valid_positions)
-        labels = []
-        for valid,label in zip(valid_positions,logits_label):
-            if valid:
-                labels.append(self.label_map[label])
+        labels = [self.label_map[label] for label in logits_label]
         words = word_tokenize(text)
         assert len(labels) == len(words)
         output = {word:{"tag":label,"confidence":confidence} for word,label,confidence in zip(words,labels,logits_confidence)}
