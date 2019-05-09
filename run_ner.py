@@ -31,7 +31,7 @@ logging.basicConfig(format = '%(asctime)s - %(levelname)s - %(name)s -   %(messa
 logger = logging.getLogger(__name__)
 
 class Ner(BertForTokenClassification):
-   
+
     def forward(self, input_ids, token_type_ids=None, attention_mask=None, labels=None,valid_ids=None,attention_mask_label=None):
         sequence_output, _ = self.bert(input_ids, token_type_ids, attention_mask, output_all_encoded_layers=False)
         batch_size,max_len,feat_dim = sequence_output.shape
@@ -147,19 +147,19 @@ class NerProcessor(DataProcessor):
         """See base class."""
         return self._create_examples(
             self._read_tsv(os.path.join(data_dir, "train.txt")), "train")
-    
+
     def get_dev_examples(self, data_dir):
         """See base class."""
         return self._create_examples(
             self._read_tsv(os.path.join(data_dir, "valid.txt")), "dev")
-    
+
     def get_test_examples(self, data_dir):
         """See base class."""
         return self._create_examples(
             self._read_tsv(os.path.join(data_dir, "test.txt")), "test")
-    
+
     def get_labels(self):
-        return ["O", "B-MISC", "I-MISC",  "B-PER", "I-PER", "B-ORG", "I-ORG", "B-LOC", "I-LOC", "[CLS]", "[SEP]"]
+        return ["O", "B-MISC", "I-MISC",  "B-PER", "I-PER", "B-ORG", "I-ORG", "B-LOC", "I-LOC"]
 
     def _create_examples(self,lines,set_type):
         examples = []
@@ -175,7 +175,7 @@ def convert_examples_to_features(examples, label_list, max_seq_length, tokenizer
     """Loads a data file into a list of `InputBatch`s."""
 
     label_map = {label : i for i, label in enumerate(label_list,1)}
-    
+
     features = []
     for (ex_index,example) in enumerate(examples):
         textlist = example.text_a.split(' ')
@@ -207,7 +207,7 @@ def convert_examples_to_features(examples, label_list, max_seq_length, tokenizer
         segment_ids.append(0)
         valid.insert(0,1)
         label_mask.insert(0,1)
-        label_ids.append(label_map["[CLS]"])
+        label_ids.append(label_map["O"])
         for i, token in enumerate(tokens):
             ntokens.append(token)
             segment_ids.append(0)
@@ -217,7 +217,7 @@ def convert_examples_to_features(examples, label_list, max_seq_length, tokenizer
         segment_ids.append(0)
         valid.append(1)
         label_mask.append(1)
-        label_ids.append(label_map["[SEP]"])
+        label_ids.append(label_map["O"])
         input_ids = tokenizer.convert_tokens_to_ids(ntokens)
         input_mask = [1] * len(input_ids)
         label_mask = [1] * len(label_ids)
@@ -356,7 +356,7 @@ def main():
         print("Waiting for debugger attach")
         ptvsd.enable_attach(address=(args.server_ip, args.server_port), redirect_output=True)
         ptvsd.wait_for_attach()
-    
+
     processors = {"ner":NerProcessor}
 
     if args.local_rank == -1 or args.no_cuda:
@@ -374,7 +374,7 @@ def main():
     if args.gradient_accumulation_steps < 1:
         raise ValueError("Invalid gradient_accumulation_steps parameter: {}, should be >= 1".format(
                             args.gradient_accumulation_steps))
-    
+
     args.train_batch_size = args.train_batch_size // args.gradient_accumulation_steps
 
     random.seed(args.seed)
@@ -388,7 +388,7 @@ def main():
         raise ValueError("Output directory ({}) already exists and is not empty.".format(args.output_dir))
     if not os.path.exists(args.output_dir):
         os.makedirs(args.output_dir)
-    
+
     task_name = args.task_name.lower()
 
     if task_name not in processors:
@@ -408,7 +408,7 @@ def main():
             len(train_examples) / args.train_batch_size / args.gradient_accumulation_steps) * args.num_train_epochs
         if args.local_rank != -1:
             num_train_optimization_steps = num_train_optimization_steps // torch.distributed.get_world_size()
-    
+
     # Prepare model
     cache_dir = args.cache_dir if args.cache_dir else os.path.join(str(PYTORCH_PRETRAINED_BERT_CACHE), 'distributed_{}'.format(args.local_rank))
     model = Ner.from_pretrained(args.bert_model,
@@ -510,7 +510,7 @@ def main():
                     optimizer.step()
                     optimizer.zero_grad()
                     global_step += 1
-                                
+
         # Save a trained model and the associated configuration
         model_to_save = model.module if hasattr(model, 'module') else model  # Only save the model it-self
         output_model_file = os.path.join(args.output_dir, WEIGHTS_NAME)
@@ -518,7 +518,7 @@ def main():
         output_config_file = os.path.join(args.output_dir, CONFIG_NAME)
         with open(output_config_file, 'w') as f:
             f.write(model_to_save.config.to_json_string())
-        label_map = {i : label for i, label in enumerate(label_list,1)}    
+        label_map = {i : label for i, label in enumerate(label_list,1)}
         model_config = {"bert_model":args.bert_model,"do_lower":args.do_lower_case,"max_seq_length":args.max_seq_length,"num_labels":len(label_list)+1,"label_map":label_map}
         json.dump(model_config,open(os.path.join(args.output_dir,"model_config.json"),"w"))
         # Load a trained model and config that you have fine-tuned
@@ -528,7 +528,7 @@ def main():
         config = BertConfig(output_config_file)
         model = Ner(config, num_labels=num_labels)
         model.load_state_dict(torch.load(output_model_file))
-    
+
     model.to(device)
 
     if args.do_eval and (args.local_rank == -1 or torch.distributed.get_rank() == 0):
@@ -563,19 +563,21 @@ def main():
 
             with torch.no_grad():
                 logits = model(input_ids, segment_ids, input_mask,valid_ids=valid_ids,attention_mask_label=l_mask)
-            
+
             logits = torch.argmax(F.log_softmax(logits,dim=2),dim=2)
             logits = logits.detach().cpu().numpy()
             label_ids = label_ids.to('cpu').numpy()
             input_mask = input_mask.to('cpu').numpy()
-        
+
             for i, label in enumerate(label_ids):
                 temp_1 = []
                 temp_2 = []
                 for j,m in enumerate(label):
                     if j == 0:
                         continue
-                    elif label_ids[i][j] == 11:
+                    elif input_mask[i][j] == 0:
+                        temp_1.pop()
+                        temp_2.pop()
                         y_true.append(temp_1)
                         y_pred.append(temp_2)
                         break
@@ -590,7 +592,7 @@ def main():
             logger.info("***** Eval results *****")
             logger.info("\n%s", report)
             writer.write(report)
-        
+
 
 if __name__ == "__main__":
     main()
