@@ -91,5 +91,5 @@ class Ner:
                 labels.append(self.label_map[label])
         words = word_tokenize(text)
         assert len(labels) == len(words)
-        output = {word:{"tag":label,"confidence":confidence} for word,label,confidence in zip(words,labels,logits_confidence)}
+        output = [word:{"tag":label,"confidence":confidence} for word,label,confidence in zip(words,labels,logits_confidence)]
         return output
