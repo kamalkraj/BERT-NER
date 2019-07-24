@@ -95,16 +95,23 @@ class Ner:
             logits = self.model(input_ids, segment_ids, input_mask,valid_ids)
         logits = F.softmax(logits,dim=2)
         logits_label = torch.argmax(logits,dim=2)
-        logits_label = logits_label.detach().cpu().numpy()
+        logits_label = logits_label.detach().cpu().numpy().tolist()[0]
         # import ipdb; ipdb.set_trace()
-        logits_confidence = [values[label].item() for values,label in zip(logits[0],logits_label[0])]
+        logits_confidence = [values[label].item() for values,label in zip(logits[0],logits_label)]
 
-        logits_label = [logits_label[0][index] for index,i in enumerate(input_mask[0]) if i.item()==1]
-        logits_label.pop(0)
-        logits_label.pop()
+        logits = []
+        pos = 0
+        for index,mask in enumerate(valid_ids[0]):
+            if index == 0:
+                continue
+            if mask == 1:
+                logits.append((logits_label[index-pos],logits_confidence[index-pos]))
+            else:
+                pos += 1
+        logits.pop()
 
-        labels = [self.label_map[label] for label in logits_label]
+        labels = [(self.label_map[label],confidence) for label,confidence in logits]
         words = word_tokenize(text)
         assert len(labels) == len(words)
-        output = [word:{"tag":label,"confidence":confidence} for word,label,confidence in zip(words,labels,logits_confidence)]
+        output = [(word,{"tag":label,"confidence":confidence}) for word,(label,confidence) in zip(words,labels)]
         return output
