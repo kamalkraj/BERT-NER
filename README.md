@@ -49,24 +49,10 @@ model = Ner("out_!x/")
 output = model.predict("Steve went to Paris")
 
 print(output)
-# {
-#     "Steve": {
-#         "tag": "B-PER",
-#         "confidence": 0.999879002571106
-#     },
-#     "went": {
-#         "tag": "O",
-#         "confidence": 0.9968552589416504
-#     },
-#     "to": {
-#         "tag": "O",
-#         "confidence": 0.9996656179428101
-#     },
-#     "Paris": {
-#         "tag": "B-LOC",
-#         "confidence": 0.999504804611206
-#     }
-# }
+# ('Steve', {'tag': 'B-PER', 'confidence': 0.9981840252876282})
+# ('went', {'tag': 'O', 'confidence': 0.9998939037322998})
+# ('to', {'tag': 'O', 'confidence': 0.999891996383667})
+# ('Paris', {'tag': 'B-LOC', 'confidence': 0.9991968274116516})
 
 ```
 
