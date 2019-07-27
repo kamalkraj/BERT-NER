@@ -15,7 +15,7 @@ from pytorch_pretrained_bert.file_utils import PYTORCH_PRETRAINED_BERT_CACHE
 from pytorch_pretrained_bert.modeling import (CONFIG_NAME, WEIGHTS_NAME,
                                               BertConfig,
                                               BertForTokenClassification)
-from pytorch_pretrained_bert.optimization import BertAdam, warmup_linear
+from pytorch_pretrained_bert.optimization import BertAdam, WarmupLinearSchedule
 from pytorch_pretrained_bert.tokenization import BertTokenizer
 from seqeval.metrics import classification_report
 from torch import nn
@@ -112,9 +112,9 @@ def readfile(filename):
         splits = line.split(' ')
         sentence.append(splits[0])
         label.append(splits[-1][:-1])
-
     if len(sentence) >0:
         data.append((sentence,label))
+        print(data)
         sentence = []
         label = []
     return data
@@ -159,7 +159,7 @@ class NerProcessor(DataProcessor):
             self._read_tsv(os.path.join(data_dir, "test.txt")), "test")
     
     def get_labels(self):
-        return ["O", "B-MISC", "I-MISC",  "B-PER", "I-PER", "B-ORG", "I-ORG", "B-LOC", "I-LOC", "[CLS]", "[SEP]"]
+        return ["O", "0", "B-MISC", "I-MISC",  "B-PER", "I-PER", "B-ORG", "I-ORG", "B-LOC", "I-LOC", "B-Disease", "I-Disease", "[CLS]", "[SEP]"]
 
     def _create_examples(self,lines,set_type):
         examples = []
@@ -173,9 +173,8 @@ class NerProcessor(DataProcessor):
 
 def convert_examples_to_features(examples, label_list, max_seq_length, tokenizer):
     """Loads a data file into a list of `InputBatch`s."""
-
     label_map = {label : i for i, label in enumerate(label_list,1)}
-    
+
     features = []
     for (ex_index,example) in enumerate(examples):
         textlist = example.text_a.split(' ')
@@ -200,6 +199,8 @@ def convert_examples_to_features(examples, label_list, max_seq_length, tokenizer
             labels = labels[0:(max_seq_length - 2)]
             valid = valid[0:(max_seq_length - 2)]
             label_mask = label_mask[0:(max_seq_length - 2)]
+
+        print(labels)
         ntokens = []
         segment_ids = []
         label_ids = []
@@ -299,6 +300,9 @@ def main():
     parser.add_argument("--do_eval",
                         action='store_true',
                         help="Whether to run eval on the dev set.")
+    parser.add_argument("--do_predict",
+                        action='store_true',
+                        help="Whether to predict interactively.")
     parser.add_argument("--do_lower_case",
                         action='store_true',
                         help="Set this flag if you are using an uncased model.")
@@ -396,6 +400,7 @@ def main():
 
     processor = processors[task_name]()
     label_list = processor.get_labels()
+    print(label_list)
     num_labels = len(label_list) + 1
 
     tokenizer = BertTokenizer.from_pretrained(args.bert_model, do_lower_case=args.do_lower_case)
@@ -498,19 +503,26 @@ def main():
                     loss.backward()
 
                 tr_loss += loss.item()
+                # logger.info("train loss {} at epoch {}",format(str(tr_loss), str(_)))
                 nb_tr_examples += input_ids.size(0)
                 nb_tr_steps += 1
                 if (step + 1) % args.gradient_accumulation_steps == 0:
                     if args.fp16:
                         # modify learning rate with special warm up BERT uses
                         # if args.fp16 is False, BertAdam is used that handles this automatically
-                        lr_this_step = args.learning_rate * warmup_linear(global_step/num_train_optimization_steps, args.warmup_proportion)
+                        lr_this_step = args.learning_rate * WarmupLinearSchedule(global_step/num_train_optimization_steps, args.warmup_proportion)
+
                         for param_group in optimizer.param_groups:
                             param_group['lr'] = lr_this_step
                     optimizer.step()
                     optimizer.zero_grad()
                     global_step += 1
-                                
+
+            model_to_save = model.module if hasattr(model, 'module') else model  # Only save the model it-self
+            output_model_file = os.path.join(args.output_dir, WEIGHTS_NAME)
+            torch.save(model_to_save.state_dict(), output_model_file)
+            output_config_file = os.path.join(args.output_dir, CONFIG_NAME)
+
         # Save a trained model and the associated configuration
         model_to_save = model.module if hasattr(model, 'module') else model  # Only save the model it-self
         output_model_file = os.path.join(args.output_dir, WEIGHTS_NAME)
@@ -590,6 +602,9 @@ def main():
             logger.info("***** Eval results *****")
             logger.info("\n%s", report)
             writer.write(report)
+
+    # if args.do_predict:
+
         
 
 if __name__ == "__main__":
