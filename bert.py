@@ -45,7 +45,7 @@ class Ner:
         output_model_file = os.path.join(model_dir, WEIGHTS_NAME)
         config = BertConfig(output_config_file)
         model = BertNer(config, num_labels=model_config["num_labels"])
-        if torch.cuda.is_available()
+        if torch.cuda.is_available():
           model.load_state_dict(torch.load(output_model_file))
         else:
           model.load_state_dict(torch.load(output_model_file,map_location='cpu'))
@@ -99,7 +99,7 @@ class Ner:
         logits = F.softmax(logits,dim=2)
         logits_label = torch.argmax(logits,dim=2)
         logits_label = logits_label.detach().cpu().numpy().tolist()[0]
-        # import ipdb; ipdb.set_trace()
+
         logits_confidence = [values[label].item() for values,label in zip(logits[0],logits_label)]
 
         logits = []
