@@ -45,7 +45,10 @@ class Ner:
         output_model_file = os.path.join(model_dir, WEIGHTS_NAME)
         config = BertConfig(output_config_file)
         model = BertNer(config, num_labels=model_config["num_labels"])
-        model.load_state_dict(torch.load(output_model_file))
+        if torch.cuda.is_available()
+          model.load_state_dict(torch.load(output_model_file))
+        else:
+          model.load_state_dict(torch.load(output_model_file,map_location='cpu'))
         tokenizer = BertTokenizer.from_pretrained(model_config["bert_model"],do_lower_case=False)
         return model, tokenizer, model_config
 
