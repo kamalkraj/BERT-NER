@@ -15,6 +15,8 @@ Use google BERT to do CoNLL-2003 NER !
 
 # Result
 
+## BERT-BASE
+
 ### Validation Data
 ```
              precision    recall  f1-score   support
@@ -38,6 +40,32 @@ avg / total     0.9470    0.9532    0.9501      5942
 avg / total     0.9049    0.9189    0.9117      5648
 ```
 ## Pretrained model download from [here](https://drive.google.com/file/d/1hmj1zC6xipR7KTT04bJpSUPNU1pRuI7h/view?usp=sharing)
+
+## BERT-LARGE
+
+### Validation Data
+```
+             precision    recall  f1-score   support
+
+        PER     0.9787    0.9739    0.9763      1842
+        LOC     0.9700    0.9690    0.9695      1837
+       MISC     0.8899    0.9208    0.9051       922
+        ORG     0.9311    0.9478    0.9394      1341
+
+avg / total     0.9515    0.9583    0.9548      5942
+```
+### Test Data
+```
+             precision    recall  f1-score   support
+
+        ORG     0.8856    0.9181    0.9016      1661
+        LOC     0.9250    0.9323    0.9286      1668
+        PER     0.9694    0.9586    0.9639      1617
+       MISC     0.7937    0.8219    0.8076       702
+
+avg / total     0.9098    0.9219    0.9157      5648
+```
+## Pretrained model download from [here](https://drive.google.com/file/d/1OCI6EeXwX3AF50hnR6J1VAgBUPRNZGG8/view?usp=sharing)
 
 # Inference
 
