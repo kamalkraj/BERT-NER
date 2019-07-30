@@ -110,7 +110,7 @@ python api.py
 ```
 API will be live at `0.0.0.0:8000` endpoint `predict`
 #### cURL request
-` curl -X POST http://192.168.10.62:8000/predict -H 'Content-Type: application/json' -d '{ "text": "Steve went to Paris" }'`
+` curl -X POST http://0.0.0.0:8000/predict -H 'Content-Type: application/json' -d '{ "text": "Steve went to Paris" }'`
 
 Output
 ```json
