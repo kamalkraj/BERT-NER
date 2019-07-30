@@ -77,11 +77,30 @@ model = Ner("out_!x/")
 output = model.predict("Steve went to Paris")
 
 print(output)
-# ('Steve', {'tag': 'B-PER', 'confidence': 0.9981840252876282})
-# ('went', {'tag': 'O', 'confidence': 0.9998939037322998})
-# ('to', {'tag': 'O', 'confidence': 0.999891996383667})
-# ('Paris', {'tag': 'B-LOC', 'confidence': 0.9991968274116516})
-
+'''
+    [
+        {
+            "confidence": 0.9981840252876282,
+            "tag": "B-PER",
+            "word": "Steve"
+        },
+        {
+            "confidence": 0.9998939037322998,
+            "tag": "O",
+            "word": "went"
+        },
+        {
+            "confidence": 0.999891996383667,
+            "tag": "O",
+            "word": "to"
+        },
+        {
+            "confidence": 0.9991968274116516,
+            "tag": "B-LOC",
+            "word": "Paris"
+        }
+    ]
+'''
 ```
 
 # Deploy REST-API
