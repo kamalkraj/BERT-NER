@@ -84,6 +84,47 @@ print(output)
 
 ```
 
+# Deploy REST-API
+BERT NER model deployed as rest api
+```bash
+python api.py
+```
+API will be live at `0.0.0.0:8000` endpoint `predict`
+#### cURL request
+` curl -X POST http://192.168.10.62:8000/predict -H 'Content-Type: application/json' -d '{ "text": "Steve went to Paris" }'`
+
+Output
+```json
+{
+    "result": [
+        {
+            "confidence": 0.9981840252876282,
+            "tag": "B-PER",
+            "word": "Steve"
+        },
+        {
+            "confidence": 0.9998939037322998,
+            "tag": "O",
+            "word": "went"
+        },
+        {
+            "confidence": 0.999891996383667,
+            "tag": "O",
+            "word": "to"
+        },
+        {
+            "confidence": 0.9991968274116516,
+            "tag": "B-LOC",
+            "word": "Paris"
+        }
+    ]
+}
+```
+#### cURL 
+![curl output image](/img/curl.png)
+#### Postman
+![postman output image](/img/postman.png)
+
 
 ### Tensorflow version
 
