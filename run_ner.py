@@ -95,8 +95,6 @@ class InputFeatures(object):
 def readfile(filename):
     '''
     read file
-    return format :
-    [ ['EU', 'B-ORG'], ['rejects', 'O'], ['German', 'B-MISC'], ['call', 'O'], ['to', 'O'], ['boycott', 'O'], ['British', 'B-MISC'], ['lamb', 'O'], ['.', 'O'] ]
     '''
     f = open(filename)
     data = []
