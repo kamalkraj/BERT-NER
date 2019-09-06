@@ -1,4 +1,4 @@
-"""BERT NER Inference.""" 
+"""BERT NER Inference."""
 
 from __future__ import absolute_import, division, print_function
 
@@ -8,15 +8,14 @@ import os
 import torch
 import torch.nn.functional as F
 from nltk import word_tokenize
-from pytorch_pretrained_bert.modeling import (CONFIG_NAME, WEIGHTS_NAME,
-                                              BertConfig,
-                                              BertForTokenClassification)
-from pytorch_pretrained_bert.tokenization import BertTokenizer
+from pytorch_transformers import (BertConfig, BertForTokenClassification,
+                                  BertTokenizer)
+
 
 class BertNer(BertForTokenClassification):
-   
+
     def forward(self, input_ids, token_type_ids=None, attention_mask=None, valid_ids=None):
-        sequence_output, _ = self.bert(input_ids, token_type_ids, attention_mask, output_all_encoded_layers=False)
+        sequence_output = self.bert(input_ids, token_type_ids, attention_mask, head_mask=None)[0]
         batch_size,max_len,feat_dim = sequence_output.shape
         valid_output = torch.zeros(batch_size,max_len,feat_dim,dtype=torch.float32)
         for i in range(batch_size):
@@ -40,16 +39,8 @@ class Ner:
 
     def load_model(self, model_dir: str, model_config: str = "model_config.json"):
         model_config = os.path.join(model_dir,model_config)
-        model_config = json.load(open(model_config))
-        output_config_file = os.path.join(model_dir, CONFIG_NAME)
-        output_model_file = os.path.join(model_dir, WEIGHTS_NAME)
-        config = BertConfig(output_config_file)
-        model = BertNer(config, num_labels=model_config["num_labels"])
-        if torch.cuda.is_available():
-          model.load_state_dict(torch.load(output_model_file))
-        else:
-          model.load_state_dict(torch.load(output_model_file,map_location='cpu'))
-        tokenizer = BertTokenizer.from_pretrained(model_config["bert_model"],do_lower_case=False)
+        model = BertNer.from_pretrained(model_dir)
+        tokenizer = BertTokenizer.from_pretrained(model_dir, do_lower_case=model_config["do_lower_case"])
         return model, tokenizer, model_config
 
     def tokenize(self, text: str):
