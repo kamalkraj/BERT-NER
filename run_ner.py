@@ -11,19 +11,16 @@ import sys
 import numpy as np
 import torch
 import torch.nn.functional as F
-from pytorch_pretrained_bert.file_utils import PYTORCH_PRETRAINED_BERT_CACHE
-from pytorch_pretrained_bert.modeling import (CONFIG_NAME, WEIGHTS_NAME,
-                                              BertConfig,
-                                              BertForTokenClassification)
-from pytorch_pretrained_bert.optimization import BertAdam, warmup_linear
-from pytorch_pretrained_bert.tokenization import BertTokenizer
-from seqeval.metrics import classification_report
+from pytorch_transformers import (WEIGHTS_NAME, AdamW, BertConfig,
+                                  BertForTokenClassification, BertTokenizer,
+                                  WarmupLinearSchedule)
 from torch import nn
-from torch.nn import CrossEntropyLoss
 from torch.utils.data import (DataLoader, RandomSampler, SequentialSampler,
                               TensorDataset)
 from torch.utils.data.distributed import DistributedSampler
 from tqdm import tqdm, trange
+
+from seqeval.metrics import classification_report
 
 logging.basicConfig(format = '%(asctime)s - %(levelname)s - %(name)s -   %(message)s',
                     datefmt = '%m/%d/%Y %H:%M:%S',
@@ -31,9 +28,9 @@ logging.basicConfig(format = '%(asctime)s - %(levelname)s - %(name)s -   %(messa
 logger = logging.getLogger(__name__)
 
 class Ner(BertForTokenClassification):
-   
+
     def forward(self, input_ids, token_type_ids=None, attention_mask=None, labels=None,valid_ids=None,attention_mask_label=None):
-        sequence_output, _ = self.bert(input_ids, token_type_ids, attention_mask, output_all_encoded_layers=False)
+        sequence_output = self.bert(input_ids, token_type_ids, attention_mask,head_mask=None)[0]
         batch_size,max_len,feat_dim = sequence_output.shape
         valid_output = torch.zeros(batch_size,max_len,feat_dim,dtype=torch.float32,device='cuda')
         for i in range(batch_size):
@@ -46,7 +43,7 @@ class Ner(BertForTokenClassification):
         logits = self.classifier(sequence_output)
 
         if labels is not None:
-            loss_fct = CrossEntropyLoss(ignore_index=0)
+            loss_fct = nn.CrossEntropyLoss(ignore_index=0)
             # Only keep active parts of the loss
             attention_mask_label = None
             if attention_mask_label is not None:
@@ -145,17 +142,17 @@ class NerProcessor(DataProcessor):
         """See base class."""
         return self._create_examples(
             self._read_tsv(os.path.join(data_dir, "train.txt")), "train")
-    
+
     def get_dev_examples(self, data_dir):
         """See base class."""
         return self._create_examples(
             self._read_tsv(os.path.join(data_dir, "valid.txt")), "dev")
-    
+
     def get_test_examples(self, data_dir):
         """See base class."""
         return self._create_examples(
             self._read_tsv(os.path.join(data_dir, "test.txt")), "test")
-    
+
     def get_labels(self):
         return ["O", "B-MISC", "I-MISC",  "B-PER", "I-PER", "B-ORG", "I-ORG", "B-LOC", "I-LOC", "[CLS]", "[SEP]"]
 
@@ -173,7 +170,7 @@ def convert_examples_to_features(examples, label_list, max_seq_length, tokenizer
     """Loads a data file into a list of `InputBatch`s."""
 
     label_map = {label : i for i, label in enumerate(label_list,1)}
-    
+
     features = []
     for (ex_index,example) in enumerate(examples):
         textlist = example.text_a.split(' ')
@@ -321,6 +318,12 @@ def main():
                         type=float,
                         help="Proportion of training to perform linear learning rate warmup for. "
                              "E.g., 0.1 = 10%% of training.")
+    parser.add_argument("--weight_decay", default=0.01, type=float,
+                        help="Weight deay if we apply some.")
+    parser.add_argument("--adam_epsilon", default=1e-8, type=float,
+                        help="Epsilon for Adam optimizer.")
+    parser.add_argument("--max_grad_norm", default=1.0, type=float,
+                        help="Max gradient norm.")
     parser.add_argument("--no_cuda",
                         action='store_true',
                         help="Whether not to use CUDA when available")
@@ -354,7 +357,7 @@ def main():
         print("Waiting for debugger attach")
         ptvsd.enable_attach(address=(args.server_ip, args.server_port), redirect_output=True)
         ptvsd.wait_for_attach()
-    
+
     processors = {"ner":NerProcessor}
 
     if args.local_rank == -1 or args.no_cuda:
@@ -372,7 +375,7 @@ def main():
     if args.gradient_accumulation_steps < 1:
         raise ValueError("Invalid gradient_accumulation_steps parameter: {}, should be >= 1".format(
                             args.gradient_accumulation_steps))
-    
+
     args.train_batch_size = args.train_batch_size // args.gradient_accumulation_steps
 
     random.seed(args.seed)
@@ -386,7 +389,7 @@ def main():
         raise ValueError("Output directory ({}) already exists and is not empty.".format(args.output_dir))
     if not os.path.exists(args.output_dir):
         os.makedirs(args.output_dir)
-    
+
     task_name = args.task_name.lower()
 
     if task_name not in processors:
@@ -406,52 +409,48 @@ def main():
             len(train_examples) / args.train_batch_size / args.gradient_accumulation_steps) * args.num_train_epochs
         if args.local_rank != -1:
             num_train_optimization_steps = num_train_optimization_steps // torch.distributed.get_world_size()
-    
+
+    if args.local_rank not in [-1, 0]:
+        torch.distributed.barrier()  # Make sure only the first process in distributed training will download model & vocab
+
     # Prepare model
-    cache_dir = args.cache_dir if args.cache_dir else os.path.join(str(PYTORCH_PRETRAINED_BERT_CACHE), 'distributed_{}'.format(args.local_rank))
+    config = BertConfig.from_pretrained(args.bert_model, num_labels=num_labels, finetuning_task=args.task_name)
     model = Ner.from_pretrained(args.bert_model,
-              cache_dir=cache_dir,
-              num_labels = num_labels)
+              from_tf = False,
+              config = config)
+
     if args.fp16:
         model.half()
-    model.to(device)
-    if args.local_rank != -1:
-        try:
-            from apex.parallel import DistributedDataParallel as DDP
-        except ImportError:
-            raise ImportError("Please install apex from https://www.github.com/nvidia/apex to use distributed and fp16 training.")
 
-        model = DDP(model)
-    elif n_gpu > 1:
-        model = torch.nn.DataParallel(model)
+    if args.local_rank == 0:
+        torch.distributed.barrier()  # Make sure only the first process in distributed training will download model & vocab
+
+    model.to(device)
 
     param_optimizer = list(model.named_parameters())
-    no_decay = ['bias', 'LayerNorm.bias', 'LayerNorm.weight']
+    no_decay = ['bias','LayerNorm.weight']
     optimizer_grouped_parameters = [
-        {'params': [p for n, p in param_optimizer if not any(nd in n for nd in no_decay)], 'weight_decay': 0.01},
+        {'params': [p for n, p in param_optimizer if not any(nd in n for nd in no_decay)], 'weight_decay': args.weight_decay},
         {'params': [p for n, p in param_optimizer if any(nd in n for nd in no_decay)], 'weight_decay': 0.0}
         ]
+    warmup_steps = int(args.warmup_proportion * num_train_optimization_steps)
+    optimizer = AdamW(optimizer_grouped_parameters, lr=args.learning_rate, eps=args.adam_epsilon)
+    scheduler = WarmupLinearSchedule(optimizer, warmup_steps=warmup_steps, t_total=num_train_optimization_steps)
     if args.fp16:
         try:
-            from apex.optimizers import FP16_Optimizer
-            from apex.optimizers import FusedAdam
+            from apex import amp
         except ImportError:
-            raise ImportError("Please install apex from https://www.github.com/nvidia/apex to use distributed and fp16 training.")
+            raise ImportError("Please install apex from https://www.github.com/nvidia/apex to use fp16 training.")
+        model, optimizer = amp.initialize(model, optimizer, opt_level=args.fp16_opt_level)
 
-        optimizer = FusedAdam(optimizer_grouped_parameters,
-                              lr=args.learning_rate,
-                              bias_correction=False,
-                              max_grad_norm=1.0)
-        if args.loss_scale == 0:
-            optimizer = FP16_Optimizer(optimizer, dynamic_loss_scale=True)
-        else:
-            optimizer = FP16_Optimizer(optimizer, static_loss_scale=args.loss_scale)
+    # multi-gpu training (should be after apex fp16 initialization)
+    if n_gpu > 1:
+        model = torch.nn.DataParallel(model)
 
-    else:
-        optimizer = BertAdam(optimizer_grouped_parameters,
-                             lr=args.learning_rate,
-                             warmup=args.warmup_proportion,
-                             t_total=num_train_optimization_steps)
+    if args.local_rank != -1:
+        model = torch.nn.parallel.DistributedDataParallel(model, device_ids=[args.local_rank],
+                                                          output_device=args.local_rank,
+                                                          find_unused_parameters=True)
 
     global_step = 0
     nb_tr_steps = 0
@@ -491,42 +490,35 @@ def main():
                     loss = loss / args.gradient_accumulation_steps
 
                 if args.fp16:
-                    optimizer.backward(loss)
+                    with amp.scale_loss(loss, optimizer) as scaled_loss:
+                        scaled_loss.backward()
+                    torch.nn.utils.clip_grad_norm_(amp.master_params(optimizer), args.max_grad_norm)
                 else:
                     loss.backward()
+                    torch.nn.utils.clip_grad_norm_(model.parameters(), args.max_grad_norm)
 
                 tr_loss += loss.item()
                 nb_tr_examples += input_ids.size(0)
                 nb_tr_steps += 1
                 if (step + 1) % args.gradient_accumulation_steps == 0:
-                    if args.fp16:
-                        # modify learning rate with special warm up BERT uses
-                        # if args.fp16 is False, BertAdam is used that handles this automatically
-                        lr_this_step = args.learning_rate * warmup_linear(global_step/num_train_optimization_steps, args.warmup_proportion)
-                        for param_group in optimizer.param_groups:
-                            param_group['lr'] = lr_this_step
+                    scheduler.step()  # Update learning rate schedule
                     optimizer.step()
-                    optimizer.zero_grad()
+                    model.zero_grad()
                     global_step += 1
-                                
+
         # Save a trained model and the associated configuration
         model_to_save = model.module if hasattr(model, 'module') else model  # Only save the model it-self
-        output_model_file = os.path.join(args.output_dir, WEIGHTS_NAME)
-        torch.save(model_to_save.state_dict(), output_model_file)
-        output_config_file = os.path.join(args.output_dir, CONFIG_NAME)
-        with open(output_config_file, 'w') as f:
-            f.write(model_to_save.config.to_json_string())
-        label_map = {i : label for i, label in enumerate(label_list,1)}    
+        model_to_save.save_pretrained(args.output_dir)
+        tokenizer.save_pretrained(args.output_dir)
+        label_map = {i : label for i, label in enumerate(label_list,1)}
         model_config = {"bert_model":args.bert_model,"do_lower":args.do_lower_case,"max_seq_length":args.max_seq_length,"num_labels":len(label_list)+1,"label_map":label_map}
         json.dump(model_config,open(os.path.join(args.output_dir,"model_config.json"),"w"))
         # Load a trained model and config that you have fine-tuned
     else:
-        output_config_file = os.path.join(args.output_dir, CONFIG_NAME)
-        output_model_file = os.path.join(args.output_dir, WEIGHTS_NAME)
-        config = BertConfig(output_config_file)
-        model = Ner(config, num_labels=num_labels)
-        model.load_state_dict(torch.load(output_model_file))
-    
+        # Load a trained model and vocabulary that you have fine-tuned
+        model = Ner.from_pretrained(args.output_dir)
+        tokenizer = BertTokenizer.from_pretrained(args.output_dir, do_lower_case=args.do_lower_case)
+
     model.to(device)
 
     if args.do_eval and (args.local_rank == -1 or torch.distributed.get_rank() == 0):
@@ -561,12 +553,12 @@ def main():
 
             with torch.no_grad():
                 logits = model(input_ids, segment_ids, input_mask,valid_ids=valid_ids,attention_mask_label=l_mask)
-            
+
             logits = torch.argmax(F.log_softmax(logits,dim=2),dim=2)
             logits = logits.detach().cpu().numpy()
             label_ids = label_ids.to('cpu').numpy()
             input_mask = input_mask.to('cpu').numpy()
-        
+
             for i, label in enumerate(label_ids):
                 temp_1 = []
                 temp_2 = []
@@ -588,7 +580,7 @@ def main():
             logger.info("***** Eval results *****")
             logger.info("\n%s", report)
             writer.write(report)
-        
+
 
 if __name__ == "__main__":
     main()
