@@ -41,7 +41,7 @@ class Ner:
         model_config = os.path.join(model_dir,model_config)
         model_config = json.load(open(model_config))
         model = BertNer.from_pretrained(model_dir)
-        tokenizer = BertTokenizer.from_pretrained(model_dir, do_lower_case=model_config["do_lower_case"])
+        tokenizer = BertTokenizer.from_pretrained(model_dir, do_lower_case=model_config["do_lower"])
         return model, tokenizer, model_config
 
     def tokenize(self, text: str):
