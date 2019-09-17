@@ -1,7 +1,7 @@
-pytorch-pretrained-bert==0.6.1
+pytorch-transformers==1.2.0
+torch==1.2.0
 # metric
 seqeval==0.0.5
-torch==1.0.1.post2
 # training progressbar
 tqdm==4.31.1
 # tokeniztion
