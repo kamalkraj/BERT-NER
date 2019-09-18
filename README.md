@@ -2,7 +2,7 @@
 
 Use google BERT to do CoNLL-2003 NER !
 
-Train model using Python and Inference using C++
+![new](https://i.imgur.com/OB4Ugp4.png) Train model using Python and Inference using C++
 
 [BERT-SQuAD](https://github.com/kamalkraj/BERT-SQuAD)
 
