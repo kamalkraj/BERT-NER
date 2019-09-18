@@ -179,6 +179,8 @@ Output
 #### Postman
 ![postman output image](/img/postman.png)
 
+### C++ unicode support 
+- http://github.com/ufal/unilib
 
 ### Tensorflow version
 
