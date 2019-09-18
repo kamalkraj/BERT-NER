@@ -14,7 +14,7 @@ Train model using Python and Inference using C++
 
 # Run
 
-`python run_ner.py --data_dir=data/ --bert_model=bert-base-cased --task_name=ner --output_dir=out_!x --max_seq_length=128 --do_train --num_train_epochs 5 --do_eval --warmup_proportion=0.1`
+`python run_ner.py --data_dir=data/ --bert_model=bert-base-cased --task_name=ner --output_dir=out_base --max_seq_length=128 --do_train --num_train_epochs 5 --do_eval --warmup_proportion=0.1`
 
 
 # Result
@@ -76,7 +76,7 @@ avg / total     0.9121    0.9232    0.9174      5648
 ```python
 from bert import Ner
 
-model = Ner("out_!x/")
+model = Ner("out_base/")
 
 output = model.predict("Steve went to Paris")
 
