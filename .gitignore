@@ -117,3 +117,9 @@ dmypy.json
 out*/
 .vscode/
 out*
+libtorch/*
+cpp-app/CMakeFiles/*
+base/*
+cmake*
+Makefile
+CMakeCache.txt
