@@ -9,6 +9,7 @@
 using namespace std;
 
 BertTokenizer tokenizer;
+BasicTokenizer basictokenizer;
 
 int max_seq_length = 128;
 map<int,string> label_map;
@@ -78,7 +79,7 @@ void load_model(const char* model)
 
 void tokenize(string text, vector<string> &tokens, vector<float> &valid_positions)
 {
-    vector<string> words = whitespace_tokenize(text);
+    vector<string> words = basictokenizer.tokenize(text);
     vector<string> token;
     vector<string>::iterator itr;
     for (itr = words.begin(); itr < words.end(); itr++)
@@ -173,7 +174,7 @@ vector<map<string,string>> predict(string text)
     }
     logits.pop_back();
     
-    vector<string> words = whitespace_tokenize(text);
+    vector<string> words = basictokenizer.tokenize(text);
     vector<map<string,string>> result;
     for (int i = 0; i < words.size(); i++)
     {
