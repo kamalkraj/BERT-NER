@@ -123,3 +123,4 @@ base/*
 cmake*
 Makefile
 CMakeCache.txt
+!cmake.png
