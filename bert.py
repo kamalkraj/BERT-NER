@@ -17,7 +17,7 @@ class BertNer(BertForTokenClassification):
     def forward(self, input_ids, token_type_ids=None, attention_mask=None, valid_ids=None):
         sequence_output = self.bert(input_ids, token_type_ids, attention_mask, head_mask=None)[0]
         batch_size,max_len,feat_dim = sequence_output.shape
-        valid_output = torch.zeros(batch_size,max_len,feat_dim,dtype=torch.float32)
+        valid_output = torch.zeros(batch_size,max_len,feat_dim,dtype=torch.float32,device='cuda' if torch.cuda.is_available() else 'cpu')
         for i in range(batch_size):
             jj = -1
             for j in range(max_len):
@@ -35,6 +35,8 @@ class Ner:
         self.label_map = self.model_config["label_map"]
         self.max_seq_length = self.model_config["max_seq_length"]
         self.label_map = {int(k):v for k,v in self.label_map.items()}
+        self.device = "cuda" if torch.cuda.is_available() else "cpu"
+        self.model = self.model.to(self.device)
         self.model.eval()
 
     def load_model(self, model_dir: str, model_config: str = "model_config.json"):
@@ -82,10 +84,10 @@ class Ner:
 
     def predict(self, text: str):
         input_ids,input_mask,segment_ids,valid_ids = self.preprocess(text)
-        input_ids = torch.tensor([input_ids],dtype=torch.long)
-        input_mask = torch.tensor([input_mask],dtype=torch.long)
-        segment_ids = torch.tensor([segment_ids],dtype=torch.long)
-        valid_ids = torch.tensor([valid_ids],dtype=torch.long)
+        input_ids = torch.tensor([input_ids],dtype=torch.long,device=self.device)
+        input_mask = torch.tensor([input_mask],dtype=torch.long,device=self.device)
+        segment_ids = torch.tensor([segment_ids],dtype=torch.long,device=self.device)
+        valid_ids = torch.tensor([valid_ids],dtype=torch.long,device=self.device)
         with torch.no_grad():
             logits = self.model(input_ids, segment_ids, input_mask,valid_ids)
         logits = F.softmax(logits,dim=2)
@@ -110,3 +112,4 @@ class Ner:
         assert len(labels) == len(words)
         output = [{"word":word,"tag":label,"confidence":confidence} for word,(label,confidence) in zip(words,labels)]
         return output
+
