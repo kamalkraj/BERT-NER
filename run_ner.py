@@ -45,7 +45,7 @@ class Ner(BertForTokenClassification):
         if labels is not None:
             loss_fct = nn.CrossEntropyLoss(ignore_index=0)
             # Only keep active parts of the loss
-            attention_mask_label = None
+            #attention_mask_label = None
             if attention_mask_label is not None:
                 active_loss = attention_mask_label.view(-1) == 1
                 active_logits = logits.view(-1, self.num_labels)[active_loss]
@@ -293,7 +293,10 @@ def main():
                         help="Whether to run training.")
     parser.add_argument("--do_eval",
                         action='store_true',
-                        help="Whether to run eval on the dev set.")
+                        help="Whether to run eval or not.")
+    parser.add_argument("--eval_on",
+                        default="dev",
+                        help="Whether to run eval on the dev set or test set.")
     parser.add_argument("--do_lower_case",
                         action='store_true',
                         help="Set this flag if you are using an uncased model.")
@@ -522,7 +525,12 @@ def main():
     model.to(device)
 
     if args.do_eval and (args.local_rank == -1 or torch.distributed.get_rank() == 0):
-        eval_examples = processor.get_test_examples(args.data_dir)
+        if args.eval_on == "dev":
+            eval_examples = processor.get_dev_examples(args.data_dir)
+        elif args.eval_on == "test":
+            eval_examples = processor.get_test_examples(args.data_dir)
+        else:
+            raise ValueError("eval on dev or test set only")
         eval_features = convert_examples_to_features(eval_examples, label_list, args.max_seq_length, tokenizer)
         logger.info("***** Running evaluation *****")
         logger.info("  Num examples = %d", len(eval_examples))
