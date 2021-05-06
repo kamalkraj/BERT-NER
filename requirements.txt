@@ -8,4 +8,4 @@ tqdm==4.31.1
 nltk==3.4.5
 # for rest api
 Flask==1.1.1
-Flask-Cors==3.0.8
+Flask-Cors==3.0.9
